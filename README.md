@@ -2,8 +2,8 @@
 
 **The Map and Set APIs backed by Vecs**
 
-[`map_vec::Map`](https://docs.rs/map_vec/0.2.0/map_vec/struct.Map.html) is a data structure with the interface of [`HashMap`](https://doc.rust-lang.org/std/collections/hash_map/struct.HashMap.html).
-Similarly [`map_vec::Set`](https://docs.rs/map_vec/0.2.0/map_vec/struct.Map.html) is a data structure with the interface of [`HashSet`](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html).
+[`map_vec::Map`](https://docs.rs/map_vec/0.2/map_vec/map/struct.Map.html) is a data structure with the interface of [`HashMap`](https://doc.rust-lang.org/std/collections/hash_map/struct.HashMap.html).
+Similarly [`map_vec::Set`](https://docs.rs/map_vec/0.2/map_vec/set/struct.Set.html) is a data structure with the interface of [`HashSet`](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html).
 
 Vector-backed maps and sets are primarily useful when you care about constant factors or prefer determinism to speed.
 Please refer to the docs for HashMap and HashSet for details on and examples of using the Map/Set API.

@@ -4,9 +4,9 @@ use core::{
     fmt::{self, Debug},
 };
 
-/// `map_vec::Set` is a data structure with a [`Set`](https://doc.rust-lang.org/std/collections/hash_set/struct.Set.html)-like API but based on a `Vec`.
+/// `map_vec::Set` is a data structure with a [`Set`](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html)-like API but based on a `Vec`.
 /// It's primarily useful when you care about constant factors or prefer determinism to speed.
-/// Please refer to the [docs for `Set`](https://doc.rust-lang.org/std/collections/hash_set/struct.Set.html) for details and examples of the Set API.
+/// Please refer to the [docs for `Set`](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html) for details and examples of the Set API.
 ///
 /// ## Example
 ///

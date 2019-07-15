@@ -1,3 +1,4 @@
+//! # map_vec: Map and Set APIs backed by Vecs.
 #![cfg_attr(not(test), no_std)]
 #![feature(drain_filter, shrink_to, try_reserve)]
 
