@@ -130,7 +130,7 @@ impl<K: Eq, V> Map<K, V> {
         self.backing.iter_mut().map(|(k, v)| (k, v))
     }
 
-    pub fn keys(&self) -> impl Iterator<Item = &K> {
+    pub fn keys(&self) -> impl Iterator<Item = &K> + DoubleEndedIterator + ExactSizeIterator {
         self.backing.iter().map(|(k, _)| k)
     }
 
@@ -180,11 +180,13 @@ impl<K: Eq, V> Map<K, V> {
         self.backing.try_reserve(additional)
     }
 
-    pub fn values(&self) -> impl Iterator<Item = &V> {
+    pub fn values(&self) -> impl Iterator<Item = &V> + DoubleEndedIterator + ExactSizeIterator {
         self.backing.iter().map(|(_, v)| v)
     }
 
-    pub fn values_mut(&mut self) -> impl Iterator<Item = &mut V> {
+    pub fn values_mut(
+        &mut self,
+    ) -> impl Iterator<Item = &mut V> + DoubleEndedIterator + ExactSizeIterator {
         self.backing.iter_mut().map(|(_, v)| v)
     }
 }
