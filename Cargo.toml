@@ -1,16 +1,17 @@
 [package]
 name = "map_vec"
-version = "0.1.1"
+version = "0.2.0"
 license = "MIT OR Apache-2.0"
 authors = ["Nick Hynes <nhynes@nhynes.com>"]
 repository = "https://github.com/nhynes/map_vec"
-description = "The Map API backed by a Vec"
+description = "The Map and Set APIs backed by Vec"
 readme = "README.md"
 categories = ["data-structures", "embedded", "no-std"]
 edition = "2018"
-keywords = ["vec", "map"]
+keywords = ["vec", "map", "set"]
 
 [dependencies]
+serde = { version = "1.0", optional = true, features = ["derive"] }
 
 [dev-dependencies]
 rand = "0.7"
