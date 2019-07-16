@@ -232,21 +232,25 @@ impl<K, V> IntoIterator for Map<K, V> {
 
 impl<K: Eq, V> core::iter::FromIterator<(K, V)> for Map<K, V> {
     fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
-        Self {
-            backing: iter.into_iter().collect(),
-        }
+        let mut this = Self::new();
+        this.extend(iter);
+        this
     }
 }
 
 impl<K: Eq, V> Extend<(K, V)> for Map<K, V> {
     fn extend<T: IntoIterator<Item = (K, V)>>(&mut self, iter: T) {
-        self.backing.extend(iter)
+        for (k, v) in iter {
+            self.insert(k, v);
+        }
     }
 }
 
-impl<'a, K: Copy + Eq, V: Copy> Extend<(&'a K, &'a V)> for Map<K, V> {
+impl<'a, K: 'a + Copy + Eq, V: 'a + Copy> Extend<(&'a K, &'a V)> for Map<K, V> {
     fn extend<T: IntoIterator<Item = (&'a K, &'a V)>>(&mut self, iter: T) {
-        self.backing.extend(iter.into_iter().map(|(k, v)| (*k, *v)))
+        for (k, v) in iter {
+            self.insert(*k, *v);
+        }
     }
 }
 
@@ -881,13 +885,15 @@ mod test_map {
 
     #[test]
     fn test_from_iter() {
-        let xs = [(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)];
+        let xs = [(1, 1), (2, 2), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)];
 
         let map: Map<_, _> = xs.iter().cloned().collect();
 
         for &(k, v) in &xs {
             assert_eq!(map.get(&k), Some(&v));
         }
+
+        assert_eq!(map.iter().len(), xs.len() - 1);
     }
 
     #[test]

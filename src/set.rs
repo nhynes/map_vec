@@ -235,21 +235,25 @@ impl<T> IntoIterator for Set<T> {
 
 impl<T: Eq> core::iter::FromIterator<T> for Set<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        Self {
-            backing: iter.into_iter().collect(),
-        }
+        let mut this = Self::new();
+        this.extend(iter);
+        this
     }
 }
 
 impl<T: Eq> Extend<T> for Set<T> {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
-        self.backing.extend(iter)
+        for item in iter {
+            self.insert(item);
+        }
     }
 }
 
 impl<'a, T: 'a + Copy + Eq> Extend<&'a T> for Set<T> {
     fn extend<I: IntoIterator<Item = &'a T>>(&mut self, iter: I) {
-        self.backing.extend(iter)
+        for item in iter {
+            self.insert(*item);
+        }
     }
 }
 
@@ -521,13 +525,15 @@ mod test_set {
 
     #[test]
     fn test_from_iter() {
-        let xs = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+        let xs = [1, 2, 2, 3, 4, 5, 6, 7, 8, 9];
 
         let set: Set<_> = xs.iter().cloned().collect();
 
         for x in &xs {
             assert!(set.contains(x));
         }
+
+        assert_eq!(set.iter().len(), xs.len() - 1);
     }
 
     #[test]
