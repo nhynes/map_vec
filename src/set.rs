@@ -197,7 +197,7 @@ impl<T: Eq> Set<T> {
     pub fn try_reserve(
         &mut self,
         additional: usize,
-    ) -> Result<(), alloc::collections::CollectionAllocErr> {
+    ) -> Result<(), alloc::collections::TryReserveError> {
         self.backing.try_reserve(additional)
     }
 

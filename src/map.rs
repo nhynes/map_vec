@@ -176,7 +176,7 @@ impl<K: Eq, V> Map<K, V> {
     pub fn try_reserve(
         &mut self,
         additional: usize,
-    ) -> Result<(), alloc::collections::CollectionAllocErr> {
+    ) -> Result<(), alloc::collections::TryReserveError> {
         self.backing.try_reserve(additional)
     }
 
