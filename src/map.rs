@@ -353,6 +353,93 @@ impl<'a, K: 'a, V: 'a> VacantEntry<'a, K, V> {
     }
 }
 
+#[cfg(feature = "serde")]
+mod map_serde {
+    use super::*;
+
+    use core::marker::PhantomData;
+    use serde::{
+        de::{Deserialize, Deserializer, MapAccess, Visitor},
+        ser::{Serialize, SerializeMap, Serializer},
+    };
+
+    impl<K, V> Serialize for Map<K, V>
+    where
+        K: Serialize + Eq,
+        V: Serialize,
+    {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            let mut map = serializer.serialize_map(Some(self.len()))?;
+            for (k, v) in self {
+                map.serialize_entry(k, v)?;
+            }
+            map.end()
+        }
+    }
+
+    impl<'de, K, V> Deserialize<'de> for Map<K, V>
+    where
+        K: Deserialize<'de> + Eq,
+        V: Deserialize<'de>,
+    {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            struct MapVisitor<K, V> {
+                marker: PhantomData<fn() -> Map<K, V>>,
+            }
+
+            impl<'de, K, V> Visitor<'de> for MapVisitor<K, V>
+            where
+                K: Deserialize<'de> + Eq,
+                V: Deserialize<'de>,
+            {
+                type Value = Map<K, V>;
+
+                fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                    formatter.write_str("a map")
+                }
+
+                fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+                where
+                    M: MapAccess<'de>,
+                {
+                    let mut map = Map::with_capacity(access.size_hint().unwrap_or(0));
+
+                    while let Some((key, value)) = access.next_entry()? {
+                        map.insert(key, value);
+                    }
+
+                    Ok(map)
+                }
+            }
+
+            deserializer.deserialize_map(MapVisitor {
+                marker: PhantomData,
+            })
+        }
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn test_serde() {
+        let mut m = Map::new();
+        m.insert("onefish", "twofish");
+        m.insert("redfish", "bluefish");
+        let json = serde_json::to_string(&m).unwrap();
+        assert_eq!(
+            json.as_str(),
+            r#"{"onefish":"twofish","redfish":"bluefish"}"#
+        );
+        let m2: Map<&str, &str> = serde_json::from_str(&json).unwrap();
+        assert_eq!(m2, m);
+    }
+}
+
 // taken from libstd/collections/hash/map.rs @ 7454b2
 #[cfg(test)]
 mod test_map {
@@ -361,7 +448,7 @@ mod test_map {
         Map,
     };
 
-    use std::{cell::RefCell, collections::CollectionAllocErr::*, usize};
+    use std::{cell::RefCell, collections::TryReserveError, usize};
 
     use rand::{thread_rng, Rng};
 
@@ -1146,84 +1233,14 @@ mod test_map {
 
         const MAX_USIZE: usize = usize::MAX;
 
-        if let Err(CapacityOverflow) = empty_bytes.try_reserve(MAX_USIZE) {
+        if let Err(TryReserveError::CapacityOverflow) = empty_bytes.try_reserve(MAX_USIZE) {
         } else {
             panic!("usize::MAX should trigger an overflow!");
         }
 
-        if let Err(AllocErr) = empty_bytes.try_reserve(MAX_USIZE / 8) {
+        if let Err(TryReserveError::AllocError { .. }) = empty_bytes.try_reserve(MAX_USIZE / 8) {
         } else {
             panic!("usize::MAX / 8 should trigger an OOM!")
         }
     }
 }
-
-#[cfg(feature = "serde")]
-const _IMPL_SERDE_FOR_MAP: () = {
-    use core::marker::PhantomData;
-    use serde::{
-        de::{Deserialize, Deserializer, MapAccess, Visitor},
-        ser::{Serialize, SerializeMap, Serializer},
-    };
-
-    impl<K, V> Serialize for Map<K, V>
-    where
-        K: Serialize + Eq,
-        V: Serialize,
-    {
-        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-        {
-            let mut map = serializer.serialize_map(Some(self.len()))?;
-            for (k, v) in self {
-                map.serialize_entry(k, v)?;
-            }
-            map.end()
-        }
-    }
-
-    impl<'de, K, V> Deserialize<'de> for Map<K, V>
-    where
-        K: Deserialize<'de> + Eq,
-        V: Deserialize<'de>,
-    {
-        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            struct MapVisitor<K, V> {
-                marker: PhantomData<fn() -> Map<K, V>>,
-            }
-
-            impl<'de, K, V> Visitor<'de> for MapVisitor<K, V>
-            where
-                K: Deserialize<'de> + Eq,
-                V: Deserialize<'de>,
-            {
-                type Value = Map<K, V>;
-
-                fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                    formatter.write_str("a map")
-                }
-
-                fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
-                where
-                    M: MapAccess<'de>,
-                {
-                    let mut map = Map::with_capacity(access.size_hint().unwrap_or(0));
-
-                    while let Some((key, value)) = access.next_entry()? {
-                        map.insert(key, value);
-                    }
-
-                    Ok(map)
-                }
-            }
-
-            deserializer.deserialize_map(MapVisitor {
-                marker: PhantomData,
-            })
-        }
-    }
-};
