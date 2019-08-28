@@ -19,7 +19,6 @@ use core::{
 /// }
 /// ```
 #[derive(Clone, Default, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Map<K, V> {
     backing: Vec<(K, V)>,
 }
@@ -1158,3 +1157,73 @@ mod test_map {
         }
     }
 }
+
+#[cfg(feature = "serde")]
+const _IMPL_SERDE_FOR_MAP: () = {
+    use core::marker::PhantomData;
+    use serde::{
+        de::{Deserialize, Deserializer, MapAccess, Visitor},
+        ser::{Serialize, SerializeMap, Serializer},
+    };
+
+    impl<K, V> Serialize for Map<K, V>
+    where
+        K: Serialize + Eq,
+        V: Serialize,
+    {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            let mut map = serializer.serialize_map(Some(self.len()))?;
+            for (k, v) in self {
+                map.serialize_entry(k, v)?;
+            }
+            map.end()
+        }
+    }
+
+    impl<'de, K, V> Deserialize<'de> for Map<K, V>
+    where
+        K: Deserialize<'de> + Eq,
+        V: Deserialize<'de>,
+    {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            struct MapVisitor<K, V> {
+                marker: PhantomData<fn() -> Map<K, V>>,
+            }
+
+            impl<'de, K, V> Visitor<'de> for MapVisitor<K, V>
+            where
+                K: Deserialize<'de> + Eq,
+                V: Deserialize<'de>,
+            {
+                type Value = Map<K, V>;
+
+                fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                    formatter.write_str("a map")
+                }
+
+                fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+                where
+                    M: MapAccess<'de>,
+                {
+                    let mut map = Map::with_capacity(access.size_hint().unwrap_or(0));
+
+                    while let Some((key, value)) = access.next_entry()? {
+                        map.insert(key, value);
+                    }
+
+                    Ok(map)
+                }
+            }
+
+            deserializer.deserialize_map(MapVisitor {
+                marker: PhantomData,
+            })
+        }
+    }
+};
