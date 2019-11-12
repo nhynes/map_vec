@@ -11,12 +11,10 @@ use core::{
 /// ## Example
 ///
 /// ```
-/// fn main() {
-///   let mut map = map_vec::Map::new();
-///   map.insert("hello".to_string(), "world".to_string());
-///   map.entry("hello".to_string()).and_modify(|mut v| v.push_str("!"));
-///   assert_eq!(map.get("hello").map(String::as_str), Some("world!"))
-/// }
+/// let mut map = map_vec::Map::new();
+/// map.insert("hello".to_string(), "world".to_string());
+/// map.entry("hello".to_string()).and_modify(|mut v| v.push_str("!"));
+/// assert_eq!(map.get("hello").map(String::as_str), Some("world!"))
 /// ```
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct Map<K, V> {
@@ -157,26 +155,27 @@ impl<K: Eq, V> Map<K, V> {
     }
 
     pub fn reserve(&mut self, additional: usize) {
-        self.backing.reserve(additional)
+        self.backing.reserve(additional);
     }
 
+    #[cfg(not(feature = "nightly"))]
+    pub fn retain(&mut self, mut f: impl FnMut(&K, &mut V) -> bool) {
+        let mut retained = Vec::new();
+        for (k, mut v) in self.backing.drain(..) {
+            if f(&k, &mut v) {
+                retained.push((k, v))
+            }
+        }
+        self.backing = retained;
+    }
+
+    #[cfg(feature = "nightly")]
     pub fn retain(&mut self, mut f: impl FnMut(&K, &mut V) -> bool) {
         self.backing.drain_filter(|(k, ref mut v)| !f(k, v));
     }
 
-    pub fn shrink_to(&mut self, min_capacity: usize) {
-        self.backing.shrink_to(min_capacity)
-    }
-
     pub fn shrink_to_fit(&mut self) {
-        self.backing.shrink_to_fit()
-    }
-
-    pub fn try_reserve(
-        &mut self,
-        additional: usize,
-    ) -> Result<(), alloc::collections::TryReserveError> {
-        self.backing.try_reserve(additional)
+        self.backing.shrink_to_fit();
     }
 
     pub fn values(&self) -> impl Iterator<Item = &V> + DoubleEndedIterator + ExactSizeIterator {
@@ -187,6 +186,20 @@ impl<K: Eq, V> Map<K, V> {
         &mut self,
     ) -> impl Iterator<Item = &mut V> + DoubleEndedIterator + ExactSizeIterator {
         self.backing.iter_mut().map(|(_, v)| v)
+    }
+}
+
+#[cfg(feature = "nightly")]
+impl<K: Eq, V> Map<K, V> {
+    pub fn shrink_to(&mut self, min_capacity: usize) {
+        self.backing.shrink_to(min_capacity)
+    }
+
+    pub fn try_reserve(
+        &mut self,
+        additional: usize,
+    ) -> Result<(), alloc::collections::TryReserveError> {
+        self.backing.try_reserve(additional)
     }
 }
 
@@ -448,7 +461,7 @@ mod test_map {
         Map,
     };
 
-    use std::{cell::RefCell, collections::TryReserveError, usize};
+    use std::{cell::RefCell, usize};
 
     use rand::{thread_rng, Rng};
 
@@ -1227,18 +1240,23 @@ mod test_map {
         assert_eq!(map[&6], 60);
     }
 
+    #[cfg(feature = "nightly")]
     #[test]
     fn test_try_reserve() {
         let mut empty_bytes: Map<u8, u8> = Map::new();
 
         const MAX_USIZE: usize = usize::MAX;
 
-        if let Err(TryReserveError::CapacityOverflow) = empty_bytes.try_reserve(MAX_USIZE) {
+        if let Err(std::collections::TryReserveError::CapacityOverflow) =
+            empty_bytes.try_reserve(MAX_USIZE)
+        {
         } else {
             panic!("usize::MAX should trigger an overflow!");
         }
 
-        if let Err(TryReserveError::AllocError { .. }) = empty_bytes.try_reserve(MAX_USIZE / 8) {
+        if let Err(std::collections::TryReserveError::AllocError { .. }) =
+            empty_bytes.try_reserve(MAX_USIZE / 8)
+        {
         } else {
             panic!("usize::MAX / 8 should trigger an OOM!")
         }

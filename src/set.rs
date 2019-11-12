@@ -11,17 +11,15 @@ use core::{
 /// ## Example
 ///
 /// ```
-/// fn main() {
-///   let mut set1 = map_vec::Set::new();
-///   let mut set2 = map_vec::Set::new();
-///   set1.insert(1);
-///   set1.insert(2);
-///   set2.insert(2);
-///   set2.insert(3);
-///   let mut set3 = map_vec::Set::with_capacity(1);
-///   assert!(set3.insert(3));
-///   assert_eq!(&set2 - &set1, set3);
-/// }
+/// let mut set1 = map_vec::Set::new();
+/// let mut set2 = map_vec::Set::new();
+/// set1.insert(1);
+/// set1.insert(2);
+/// set2.insert(2);
+/// set2.insert(3);
+/// let mut set3 = map_vec::Set::with_capacity(1);
+/// assert!(set3.insert(3));
+/// assert_eq!(&set2 - &set1, set3);
 /// ```
 #[derive(Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -165,12 +163,8 @@ impl<T: Eq> Set<T> {
         self.backing.reserve(additional)
     }
 
-    pub fn retain(&mut self, mut f: impl FnMut(&T) -> bool) {
-        self.backing.drain_filter(|v| !f(v));
-    }
-
-    pub fn shrink_to(&mut self, min_capacity: usize) {
-        self.backing.shrink_to(min_capacity)
+    pub fn retain(&mut self, f: impl FnMut(&T) -> bool) {
+        self.backing.retain(f);
     }
 
     pub fn shrink_to_fit(&mut self) {
@@ -195,6 +189,16 @@ impl<T: Eq> Set<T> {
             .map(|pos| self.backing.remove(pos))
     }
 
+    pub fn union<'a>(
+        &'a self,
+        other: &'a Self,
+    ) -> impl Iterator<Item = &'a T> + DoubleEndedIterator {
+        self.iter().chain(other.difference(self))
+    }
+}
+
+#[cfg(feature = "nightly")]
+impl<T: Eq> Set<T> {
     pub fn try_reserve(
         &mut self,
         additional: usize,
@@ -202,11 +206,8 @@ impl<T: Eq> Set<T> {
         self.backing.try_reserve(additional)
     }
 
-    pub fn union<'a>(
-        &'a self,
-        other: &'a Self,
-    ) -> impl Iterator<Item = &'a T> + DoubleEndedIterator {
-        self.iter().chain(other.difference(self))
+    pub fn shrink_to(&mut self, min_capacity: usize) {
+        self.backing.shrink_to(min_capacity)
     }
 }
 
