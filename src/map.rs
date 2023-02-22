@@ -1,4 +1,4 @@
-use alloc::vec::Vec;
+use alloc::{collections::TryReserveError, vec::Vec};
 use core::{
     borrow::Borrow,
     fmt::{self, Debug},
@@ -187,18 +187,12 @@ impl<K: Eq, V> Map<K, V> {
     ) -> impl Iterator<Item = &mut V> + DoubleEndedIterator + ExactSizeIterator {
         self.backing.iter_mut().map(|(_, v)| v)
     }
-}
 
-#[cfg(feature = "nightly")]
-impl<K: Eq, V> Map<K, V> {
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.backing.shrink_to(min_capacity)
     }
 
-    pub fn try_reserve(
-        &mut self,
-        additional: usize,
-    ) -> Result<(), alloc::collections::TryReserveError> {
+    pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
         self.backing.try_reserve(additional)
     }
 }
@@ -1240,25 +1234,32 @@ mod test_map {
         assert_eq!(map[&6], 60);
     }
 
-    #[cfg(feature = "nightly")]
     #[test]
     fn test_try_reserve() {
         let mut empty_bytes: Map<u8, u8> = Map::new();
 
         const MAX_USIZE: usize = usize::MAX;
 
-        if let Err(std::collections::TryReserveError::CapacityOverflow) =
-            empty_bytes.try_reserve(MAX_USIZE)
+        let _err = empty_bytes
+            .try_reserve(MAX_USIZE)
+            .expect_err("usize::MAX should trigger an overflow!");
+        #[cfg(feature = "nightly")]
         {
-        } else {
-            panic!("usize::MAX should trigger an overflow!");
+            assert_eq!(
+                alloc::collections::TryReserveErrorKind::CapacityOverflow,
+                _err.kind()
+            );
         }
 
-        if let Err(std::collections::TryReserveError::AllocError { .. }) =
-            empty_bytes.try_reserve(MAX_USIZE / 8)
+        let _err = empty_bytes
+            .try_reserve(MAX_USIZE / 8)
+            .expect_err("usize::MAX / 8 should trigger an OOM!");
+        #[cfg(feature = "nightly")]
         {
-        } else {
-            panic!("usize::MAX / 8 should trigger an OOM!")
+            assert!(matches!(
+                _err.kind(),
+                alloc::collections::TryReserveErrorKind::AllocError { .. },
+            ));
         }
     }
 }
