@@ -7,7 +7,7 @@ repository = "https://github.com/nhynes/map_vec"
 description = "The Map and Set APIs backed by Vec"
 readme = "README.md"
 categories = ["data-structures", "embedded", "no-std"]
-edition = "2018"
+edition = "2021"
 keywords = ["vec", "map", "set"]
 
 [dependencies]

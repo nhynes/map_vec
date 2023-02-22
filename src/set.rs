@@ -195,10 +195,7 @@ impl<T: Eq> Set<T> {
     ) -> impl Iterator<Item = &'a T> + DoubleEndedIterator {
         self.iter().chain(other.difference(self))
     }
-}
 
-#[cfg(feature = "nightly")]
-impl<T: Eq> Set<T> {
     pub fn try_reserve(
         &mut self,
         additional: usize,
