@@ -60,7 +60,7 @@ impl<K: Eq, V> Map<K, V> {
                 entry_pos: pos,
                 // entry: unsafe { core::mem::transmute::<&mut (K, V), &'a mut (K, V)>(entry) },
                 /* ^ since the only operations on an OccupiedEntry modify `v` in-place, the Vec will
-                 * never move in memory (reallocte), so the ref is valid for the duration of the OE. */
+                 * never move in memory (reallocate), so the ref is valid for the duration of the OE. */
                 backing: &mut self.backing,
             }),
             None => Entry::Vacant(VacantEntry {
@@ -200,7 +200,7 @@ impl<K: Eq, V> Map<K, V> {
 impl<K: Debug, V: Debug> fmt::Debug for Map<K, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_map()
-            .entries(self.backing.iter().map(|&(ref k, ref v)| (k, v)))
+            .entries(self.backing.iter().map(|(ref k, ref v)| (k, v)))
             .finish()
     }
 }
@@ -786,7 +786,7 @@ mod test_map {
         let mut m = Map::new();
         assert!(m.insert(1, 2).is_none());
         assert_eq!(*m.get(&1).unwrap(), 2);
-        assert!(!m.insert(1, 3).is_none());
+        assert!(m.insert(1, 3).is_some());
         assert_eq!(*m.get(&1).unwrap(), 3);
     }
 
@@ -887,7 +887,7 @@ mod test_map {
         let vec = vec![(1, 1), (2, 2), (3, 3)];
         let mut map: Map<_, _> = vec.into_iter().collect();
         for value in map.values_mut() {
-            *value = (*value) * 2
+            *value *= 2
         }
         let values: Vec<_> = map.values().cloned().collect();
         assert_eq!(values.len(), 3);
@@ -1061,7 +1061,7 @@ mod test_map {
         map.insert(2, 1);
         map.insert(3, 4);
 
-        map[&4];
+        _ = map[&4];
     }
 
     #[test]
@@ -1129,12 +1129,12 @@ mod test_map {
 
         // Populate the map with some items.
         for _ in 0..50 {
-            let x = rng.gen_range(-10, 10);
+            let x = rng.gen_range(-10..10);
             m.insert(x, ());
         }
 
         for _ in 0..1000 {
-            let x = rng.gen_range(-10, 10);
+            let x = rng.gen_range(-10..10);
             match m.entry(x) {
                 Vacant(_) => {}
                 Occupied(e) => {
@@ -1193,11 +1193,11 @@ mod test_map {
         let key = "hello there";
         let value = "value goes here";
         assert!(a.is_empty());
-        a.insert(key.clone(), value.clone());
+        a.insert(key, value);
         assert_eq!(a.len(), 1);
         assert_eq!(a[key], value);
 
-        match a.entry(key.clone()) {
+        match a.entry(key) {
             Vacant(_) => panic!(),
             Occupied(e) => assert_eq!(key, *e.key()),
         }
@@ -1212,11 +1212,11 @@ mod test_map {
         let value = "value goes here";
 
         assert!(a.is_empty());
-        match a.entry(key.clone()) {
+        match a.entry(key) {
             Occupied(_) => panic!(),
             Vacant(e) => {
                 assert_eq!(key, *e.key());
-                e.insert(value.clone());
+                e.insert(value);
             }
         }
         assert_eq!(a.len(), 1);
@@ -1261,5 +1261,17 @@ mod test_map {
                 alloc::collections::TryReserveErrorKind::AllocError { .. },
             ));
         }
+    }
+
+    #[test]
+    fn test_debug_format() {
+        let mut a = Map::<&str, usize>::default();
+        assert_eq!("{}", format!("{:?}", a));
+
+        a.insert("a", 1);
+        assert_eq!(r#"{"a": 1}"#, format!("{:?}", a));
+
+        a.insert("b", 2);
+        assert_eq!(r#"{"a": 1, "b": 2}"#, format!("{:?}", a));
     }
 }
