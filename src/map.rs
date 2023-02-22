@@ -2,6 +2,7 @@ use alloc::vec::Vec;
 use core::{
     borrow::Borrow,
     fmt::{self, Debug},
+    slice::{Iter, IterMut},
 };
 
 /// `map_vec::Map` is a data structure with a [`HashMap`](https://doc.rust-lang.org/std/collections/hash_map/struct.HashMap.html)-like API but based on a `Vec`.
@@ -117,14 +118,12 @@ impl<K: Eq, V> Map<K, V> {
         self.backing.is_empty()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&K, &V)> + DoubleEndedIterator + ExactSizeIterator {
-        self.backing.iter().map(|(k, v)| (k, v))
+    pub fn iter(&self) -> Iter<(K, V)> {
+        self.backing.iter()
     }
 
-    pub fn iter_mut(
-        &mut self,
-    ) -> impl Iterator<Item = (&mut K, &mut V)> + DoubleEndedIterator + ExactSizeIterator {
-        self.backing.iter_mut().map(|(k, v)| (k, v))
+    pub fn iter_mut(&mut self) -> IterMut<(K, V)> {
+        self.backing.iter_mut()
     }
 
     pub fn keys(&self) -> impl Iterator<Item = &K> + DoubleEndedIterator + ExactSizeIterator {
