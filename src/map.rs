@@ -151,7 +151,7 @@ impl<K: Eq, V> Map<K, V> {
         self.backing
             .iter()
             .position(|(k, _)| key.eq(k.borrow()))
-            .map(|pos| self.backing.remove(pos))
+            .map(|pos| self.backing.swap_remove(pos))
     }
 
     pub fn reserve(&mut self, additional: usize) {

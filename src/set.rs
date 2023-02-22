@@ -186,7 +186,7 @@ impl<T: Eq> Set<T> {
         self.backing
             .iter()
             .position(|v| value.eq(v.borrow()))
-            .map(|pos| self.backing.remove(pos))
+            .map(|pos| self.backing.swap_remove(pos))
     }
 
     pub fn union<'a>(
