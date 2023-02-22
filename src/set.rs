@@ -2,6 +2,7 @@ use alloc::vec::Vec;
 use core::{
     borrow::Borrow,
     fmt::{self, Debug},
+    slice::Iter,
 };
 
 /// `map_vec::Set` is a data structure with a [`Set`](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html)-like API but based on a `Vec`.
@@ -133,7 +134,7 @@ impl<T: Eq> Set<T> {
         other.is_subset(self)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &T> + DoubleEndedIterator + ExactSizeIterator {
+    pub fn iter(&self) -> Iter<T> {
         self.backing.iter()
     }
 
