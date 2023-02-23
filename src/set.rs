@@ -2,6 +2,7 @@ use alloc::vec::Vec;
 use core::{
     borrow::Borrow,
     fmt::{self, Debug},
+    iter::FusedIterator,
     slice::Iter,
 };
 
@@ -61,7 +62,7 @@ impl<T: Eq> Set<T> {
     pub fn difference<'a>(
         &'a self,
         other: &'a Self,
-    ) -> impl Iterator<Item = &'a T> + DoubleEndedIterator {
+    ) -> impl Iterator<Item = &'a T> + DoubleEndedIterator + FusedIterator {
         self.backing.iter().filter(move |v| !other.contains(v))
     }
 
@@ -114,7 +115,7 @@ impl<T: Eq> Set<T> {
     pub fn intersection<'a>(
         &'a self,
         other: &'a Self,
-    ) -> impl Iterator<Item = &'a T> + DoubleEndedIterator<Item = &'a T> {
+    ) -> impl Iterator<Item = &'a T> + DoubleEndedIterator<Item = &'a T> + FusedIterator {
         self.backing.iter().filter(move |v| other.contains(v))
     }
 
@@ -175,7 +176,7 @@ impl<T: Eq> Set<T> {
     pub fn symmetric_difference<'a>(
         &'a self,
         other: &'a Self,
-    ) -> impl Iterator<Item = &'a T> + DoubleEndedIterator {
+    ) -> impl Iterator<Item = &'a T> + DoubleEndedIterator + FusedIterator {
         self.difference(other).chain(other.difference(self))
     }
 
@@ -193,7 +194,7 @@ impl<T: Eq> Set<T> {
     pub fn union<'a>(
         &'a self,
         other: &'a Self,
-    ) -> impl Iterator<Item = &'a T> + DoubleEndedIterator {
+    ) -> impl Iterator<Item = &'a T> + DoubleEndedIterator + FusedIterator {
         self.iter().chain(other.difference(self))
     }
 

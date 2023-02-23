@@ -2,6 +2,7 @@ use alloc::{collections::TryReserveError, vec::Vec};
 use core::{
     borrow::Borrow,
     fmt::{self, Debug},
+    iter::FusedIterator,
     slice::{Iter, IterMut},
 };
 
@@ -126,7 +127,9 @@ impl<K: Eq, V> Map<K, V> {
         self.backing.iter_mut()
     }
 
-    pub fn keys(&self) -> impl Iterator<Item = &K> + DoubleEndedIterator + ExactSizeIterator {
+    pub fn keys(
+        &self,
+    ) -> impl Iterator<Item = &K> + DoubleEndedIterator + ExactSizeIterator + FusedIterator {
         self.backing.iter().map(|(k, _)| k)
     }
 
@@ -177,13 +180,16 @@ impl<K: Eq, V> Map<K, V> {
         self.backing.shrink_to_fit();
     }
 
-    pub fn values(&self) -> impl Iterator<Item = &V> + DoubleEndedIterator + ExactSizeIterator {
+    pub fn values(
+        &self,
+    ) -> impl Iterator<Item = &V> + DoubleEndedIterator + ExactSizeIterator + FusedIterator {
         self.backing.iter().map(|(_, v)| v)
     }
 
     pub fn values_mut(
         &mut self,
-    ) -> impl Iterator<Item = &mut V> + DoubleEndedIterator + ExactSizeIterator {
+    ) -> impl Iterator<Item = &mut V> + DoubleEndedIterator + ExactSizeIterator + FusedIterator
+    {
         self.backing.iter_mut().map(|(_, v)| v)
     }
 
