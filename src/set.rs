@@ -244,8 +244,26 @@ impl<T> IntoIterator for Set<T> {
 
 impl<T: Eq> core::iter::FromIterator<T> for Set<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        let mut this = Self::new();
+        let iter = iter.into_iter();
+
+        let mut this = match iter.size_hint() {
+            (min, Some(max)) if min > 0 && min == max => {
+                // Exact size is known. Reserve the space.
+                Self::with_capacity(min)
+            }
+            (min, Some(_)) | (min, None) if min > 0 => {
+                // The exact size is not known, but there's a minimum size known.
+                // We'll reserve what we know.
+                Self::with_capacity(min)
+            }
+            (_, _) => {
+                // There isn't even a minimum size known.
+                Self::new()
+            }
+        };
+
         this.extend(iter);
+        this.shrink_to_fit();
         this
     }
 }
@@ -266,11 +284,13 @@ impl<'a, T: 'a + Copy + Eq> Extend<&'a T> for Set<T> {
     }
 }
 
-impl<V, T: Into<Vec<V>>> From<T> for Set<V> {
+impl<V: Eq, T: Into<Vec<V>>> From<T> for Set<V> {
     fn from(values: T) -> Self {
-        Self {
-            backing: values.into(),
-        }
+        let values = values.into();
+        let mut map = Self::with_capacity(values.len());
+        map.extend(values);
+        map.shrink_to_fit();
+        map
     }
 }
 
