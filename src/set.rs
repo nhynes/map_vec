@@ -266,6 +266,14 @@ impl<'a, T: 'a + Copy + Eq> Extend<&'a T> for Set<T> {
     }
 }
 
+impl<V, T: Into<Vec<V>>> From<T> for Set<V> {
+    fn from(values: T) -> Self {
+        Self {
+            backing: values.into(),
+        }
+    }
+}
+
 impl<T: Clone + Eq> core::ops::BitOr<&Set<T>> for &Set<T> {
     type Output = Set<T>;
     fn bitor(self, rhs: &Set<T>) -> Set<T> {
@@ -706,5 +714,19 @@ mod test_set {
 
         let _: Vec<NoDefault> = Default::default();
         let _: Set<NoDefault> = Default::default();
+    }
+
+    /// Ensures that things that can be turned `Into` a `Vec` can also be turned into a `Set`
+    #[test]
+    fn test_from_into_vec() {
+        #[allow(clippy::useless_conversion)]
+        let _: Vec<()> = vec![()].into();
+        let _: Set<()> = vec![()].into();
+        let _: Vec<()> = [()].into();
+        let _: Set<()> = [()].into();
+
+        let expected: Set<char> = ['a', 'b'].iter().copied().collect();
+        let actual: Set<char> = ['a', 'b', 'a'].into();
+        assert_eq!(expected, actual, "Values should be de-duped");
     }
 }
