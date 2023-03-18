@@ -257,8 +257,26 @@ impl<K, V> IntoIterator for Map<K, V> {
 
 impl<K: Eq, V> core::iter::FromIterator<(K, V)> for Map<K, V> {
     fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
-        let mut this = Self::new();
+        let iter = iter.into_iter();
+
+        let mut this = match iter.size_hint() {
+            (min, Some(max)) if min > 0 && min == max => {
+                // Exact size is known. Reserve the space.
+                Self::with_capacity(min)
+            }
+            (min, Some(_)) | (min, None) if min > 0 => {
+                // The exact size is not known, but there's a minimum size known.
+                // We'll reserve what we know.
+                Self::with_capacity(min)
+            }
+            (_, _) => {
+                // There isn't even a minimum size known.
+                Self::new()
+            }
+        };
+
         this.extend(iter);
+        this.shrink_to_fit();
         this
     }
 }
@@ -276,6 +294,16 @@ impl<'a, K: 'a + Copy + Eq, V: 'a + Copy> Extend<(&'a K, &'a V)> for Map<K, V> {
         for (k, v) in iter {
             self.insert(*k, *v);
         }
+    }
+}
+
+impl<K: Eq, V, T: Into<Vec<(K, V)>>> From<T> for Map<K, V> {
+    fn from(values: T) -> Self {
+        let values = values.into();
+        let mut map = Self::with_capacity(values.len());
+        map.extend(values);
+        map.shrink_to_fit();
+        map
     }
 }
 
@@ -1295,5 +1323,19 @@ mod test_map {
 
         let _: Vec<NoDefault> = Default::default();
         let _: Map<NoDefault, NoDefault> = Default::default();
+    }
+
+    /// Ensures that things that can be turned `Into` a `Vec<(K, V)>` can also be turned into a `Map<K, V>`
+    #[test]
+    fn test_from_into_vec() {
+        #[allow(clippy::useless_conversion)]
+        let _: Vec<(char, u32)> = vec![('a', 1)].into();
+        let _: Map<char, u32> = vec![('a', 1)].into();
+        let _: Vec<(char, u32)> = [('a', 1)].into();
+        let _: Map<char, u32> = [('a', 1)].into();
+
+        let expected: Map<char, u32> = [('a', 3), ('b', 2)].iter().copied().collect();
+        let actual: Map<char, u32> = [('a', 1), ('b', 2), ('a', 3)].into();
+        assert_eq!(expected, actual, "Keys should be de-duped");
     }
 }
