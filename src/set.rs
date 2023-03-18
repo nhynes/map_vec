@@ -23,11 +23,19 @@ use core::{
 /// assert!(set3.insert(3));
 /// assert_eq!(&set2 - &set1, set3);
 /// ```
-#[derive(Clone, Default, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
 pub struct Set<T> {
     backing: Vec<T>,
+}
+
+impl<T> Default for Set<T> {
+    fn default() -> Self {
+        Self {
+            backing: Vec::default(),
+        }
+    }
 }
 
 impl<T: Eq> Set<T> {
@@ -688,5 +696,15 @@ mod test_set {
         assert!(set.contains(&2));
         assert!(set.contains(&4));
         assert!(set.contains(&6));
+    }
+
+    /// Ensures that, like `Vec`, `Default` works for `Set` even when its value
+    /// type does not implement `Default`.
+    #[test]
+    fn test_default() {
+        struct NoDefault;
+
+        let _: Vec<NoDefault> = Default::default();
+        let _: Set<NoDefault> = Default::default();
     }
 }

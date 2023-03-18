@@ -18,9 +18,17 @@ use core::{
 /// map.entry("hello".to_string()).and_modify(|mut v| v.push_str("!"));
 /// assert_eq!(map.get("hello").map(String::as_str), Some("world!"))
 /// ```
-#[derive(Clone, Default, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Map<K, V> {
     backing: Vec<(K, V)>,
+}
+
+impl<K, V> Default for Map<K, V> {
+    fn default() -> Self {
+        Self {
+            backing: Vec::default(),
+        }
+    }
 }
 
 impl<K: Eq, V> Map<K, V> {
@@ -1278,5 +1286,15 @@ mod test_map {
 
         a.insert("b", 2);
         assert_eq!(r#"{"a": 1, "b": 2}"#, format!("{:?}", a));
+    }
+
+    /// Ensures that, like `Vec`, `Default` works for `Map` even when its
+    /// key/value types do not implement `Default`.
+    #[test]
+    fn test_default() {
+        struct NoDefault;
+
+        let _: Vec<NoDefault> = Default::default();
+        let _: Map<NoDefault, NoDefault> = Default::default();
     }
 }
