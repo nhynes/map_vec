@@ -3,7 +3,6 @@ use core::{
     borrow::Borrow,
     fmt::{self, Debug},
     iter::FusedIterator,
-    slice::{Iter, IterMut},
 };
 
 /// `map_vec::Map` is a data structure with a [`HashMap`](https://doc.rust-lang.org/std/collections/hash_map/struct.HashMap.html)-like API but based on a `Vec`.
@@ -127,18 +126,20 @@ impl<K: Eq, V> Map<K, V> {
         self.backing.is_empty()
     }
 
-    pub fn iter(&self) -> Iter<(K, V)> {
-        self.backing.iter()
+    pub fn iter(&self) -> Iter<'_, K, V> {
+        Iter {
+            iter: self.backing.iter(),
+        }
     }
 
-    pub fn iter_mut(&mut self) -> IterMut<(K, V)> {
-        self.backing.iter_mut()
+    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
+        IterMut {
+            iter: self.backing.iter_mut(),
+        }
     }
 
-    pub fn keys(
-        &self,
-    ) -> impl Iterator<Item = &K> + DoubleEndedIterator + ExactSizeIterator + FusedIterator {
-        self.backing.iter().map(|(k, _)| k)
+    pub fn keys(&self) -> Keys<'_, K, V> {
+        Keys { iter: self.iter() }
     }
 
     pub fn len(&self) -> usize {
@@ -188,17 +189,14 @@ impl<K: Eq, V> Map<K, V> {
         self.backing.shrink_to_fit();
     }
 
-    pub fn values(
-        &self,
-    ) -> impl Iterator<Item = &V> + DoubleEndedIterator + ExactSizeIterator + FusedIterator {
-        self.backing.iter().map(|(_, v)| v)
+    pub fn values(&self) -> Values<'_, K, V> {
+        Values { iter: self.iter() }
     }
 
-    pub fn values_mut(
-        &mut self,
-    ) -> impl Iterator<Item = &mut V> + DoubleEndedIterator + ExactSizeIterator + FusedIterator
-    {
-        self.backing.iter_mut().map(|(_, v)| v)
+    pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
+        ValuesMut {
+            iter: self.iter_mut(),
+        }
     }
 
     pub fn shrink_to(&mut self, min_capacity: usize) {
@@ -218,25 +216,25 @@ impl<K: Debug, V: Debug> fmt::Debug for Map<K, V> {
     }
 }
 
-type MapRefIntoTuple<'a, K, V, I> = core::iter::Map<I, fn(&'a (K, V)) -> (&'a K, &'a V)>;
-type MapMutRefIntoTuple<'a, K, V, I> =
-    core::iter::Map<I, fn(&'a mut (K, V)) -> (&'a mut K, &'a mut V)>;
-
 impl<'a, K, V> IntoIterator for &'a Map<K, V> {
     type Item = (&'a K, &'a V);
-    type IntoIter = MapRefIntoTuple<'a, K, V, core::slice::Iter<'a, (K, V)>>;
+    type IntoIter = Iter<'a, K, V>;
 
     fn into_iter(self) -> <Self as IntoIterator>::IntoIter {
-        self.backing.iter().map(|(k, v)| (k, v))
+        Iter {
+            iter: self.backing.iter(),
+        }
     }
 }
 
 impl<'a, K, V> IntoIterator for &'a mut Map<K, V> {
     type Item = (&'a mut K, &'a mut V);
-    type IntoIter = MapMutRefIntoTuple<'a, K, V, core::slice::IterMut<'a, (K, V)>>;
+    type IntoIter = IterMut<'a, K, V>;
 
     fn into_iter(self) -> <Self as IntoIterator>::IntoIter {
-        self.backing.iter_mut().map(|(k, v)| (k, v))
+        IterMut {
+            iter: self.backing.iter_mut(),
+        }
     }
 }
 
@@ -309,6 +307,181 @@ impl<Q: Eq + ?Sized, K: Eq + Borrow<Q>, V> core::ops::Index<&Q> for Map<K, V> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Keys<'a, K, V> {
+    iter: Iter<'a, K, V>,
+}
+
+impl<K, V> Keys<'_, K, V> {
+    fn map_item<'a>(item: (&'a K, &'a V)) -> &'a K {
+        item.0
+    }
+}
+
+impl<'a, K, V> Iterator for Keys<'a, K, V> {
+    type Item = &'a K;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(Self::map_item)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+}
+
+impl<K, V> DoubleEndedIterator for Keys<'_, K, V> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.iter.next_back().map(Self::map_item)
+    }
+}
+
+impl<K, V> ExactSizeIterator for Keys<'_, K, V> {}
+impl<K, V> FusedIterator for Keys<'_, K, V> {}
+
+#[cfg(feature = "nightly")]
+impl<K, V> core::iter::TrustedLen for Keys<'_, K, V> {}
+
+#[derive(Debug, Clone)]
+pub struct Values<'a, K, V> {
+    iter: Iter<'a, K, V>,
+}
+
+impl<K, V> Values<'_, K, V> {
+    fn map_item<'a>(item: (&'a K, &'a V)) -> &'a V {
+        item.1
+    }
+}
+
+impl<'a, K, V> Iterator for Values<'a, K, V> {
+    type Item = &'a V;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(Self::map_item)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+}
+
+impl<K, V> DoubleEndedIterator for Values<'_, K, V> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.iter.next_back().map(Self::map_item)
+    }
+}
+
+impl<K, V> ExactSizeIterator for Values<'_, K, V> {}
+impl<K, V> FusedIterator for Values<'_, K, V> {}
+
+#[cfg(feature = "nightly")]
+impl<K, V> core::iter::TrustedLen for Values<'_, K, V> {}
+
+#[derive(Debug)]
+pub struct ValuesMut<'a, K, V> {
+    iter: IterMut<'a, K, V>,
+}
+
+impl<K, V> ValuesMut<'_, K, V> {
+    fn map_item<'a>(item: (&'a mut K, &'a mut V)) -> &'a mut V {
+        item.1
+    }
+}
+
+impl<'a, K, V> Iterator for ValuesMut<'a, K, V> {
+    type Item = &'a mut V;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(Self::map_item)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+}
+
+impl<K, V> DoubleEndedIterator for ValuesMut<'_, K, V> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.iter.next_back().map(Self::map_item)
+    }
+}
+
+impl<K, V> ExactSizeIterator for ValuesMut<'_, K, V> {}
+impl<K, V> FusedIterator for ValuesMut<'_, K, V> {}
+
+#[cfg(feature = "nightly")]
+impl<K, V> core::iter::TrustedLen for ValuesMut<'_, K, V> {}
+
+#[derive(Debug, Clone)]
+pub struct Iter<'a, K, V> {
+    iter: core::slice::Iter<'a, (K, V)>,
+}
+
+impl<'a, K, V> Iter<'a, K, V> {
+    fn map_item(item: &'a (K, V)) -> (&'a K, &'a V) {
+        (&item.0, &item.1)
+    }
+}
+
+impl<'a, K, V> Iterator for Iter<'a, K, V> {
+    type Item = (&'a K, &'a V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(Self::map_item)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+}
+
+impl<'a, K, V> DoubleEndedIterator for Iter<'a, K, V> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.iter.next_back().map(Self::map_item)
+    }
+}
+
+impl<'a, K, V> ExactSizeIterator for Iter<'a, K, V> {}
+impl<'a, K, V> FusedIterator for Iter<'a, K, V> {}
+
+#[cfg(feature = "nightly")]
+impl<'a, K, V> core::iter::TrustedLen for Iter<'a, K, V> {}
+
+#[derive(Debug)]
+pub struct IterMut<'a, K, V> {
+    iter: core::slice::IterMut<'a, (K, V)>,
+}
+
+impl<'a, K, V> IterMut<'a, K, V> {
+    fn map_item(item: &'a mut (K, V)) -> (&'a mut K, &'a mut V) {
+        (&mut item.0, &mut item.1)
+    }
+}
+
+impl<'a, K, V> Iterator for IterMut<'a, K, V> {
+    type Item = (&'a mut K, &'a mut V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(Self::map_item)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+}
+
+impl<'a, K, V> DoubleEndedIterator for IterMut<'a, K, V> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.iter.next_back().map(Self::map_item)
+    }
+}
+
+impl<'a, K, V> ExactSizeIterator for IterMut<'a, K, V> {}
+impl<'a, K, V> FusedIterator for IterMut<'a, K, V> {}
+
+#[cfg(feature = "nightly")]
+impl<'a, K, V> core::iter::TrustedLen for IterMut<'a, K, V> {}
+
 pub enum Entry<'a, K: 'a, V: 'a> {
     Occupied(OccupiedEntry<'a, K, V>),
     Vacant(VacantEntry<'a, K, V>),
@@ -346,6 +519,7 @@ impl<'a, K, V> Entry<'a, K, V> {
 
 impl<'a, K: 'a, V: Default> Entry<'a, K, V> {
     pub fn or_default(self) -> &'a mut V {
+        #[allow(clippy::unwrap_or_default)]
         self.or_insert(Default::default())
     }
 }
@@ -1057,6 +1231,17 @@ mod test_map {
     }
 
     #[test]
+    fn test_double_ended() {
+        let xs = [(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)];
+
+        let map: Map<_, _> = xs.iter().cloned().collect();
+
+        let last = map.iter().next_back();
+
+        assert_eq!(last, xs.last().map(|item| (&item.0, &item.1)));
+    }
+
+    #[test]
     fn test_mut_size_hint() {
         let xs = [(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)];
 
@@ -1080,6 +1265,17 @@ mod test_map {
         for _ in iter.by_ref().take(3) {}
 
         assert_eq!(iter.len(), 3);
+    }
+
+    #[test]
+    fn test_mut_double_ended() {
+        let mut xs = [(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)];
+
+        let mut map: Map<_, _> = xs.iter().cloned().collect();
+
+        let last = map.iter_mut().next_back();
+
+        assert_eq!(last, xs.last_mut().map(|item| (&mut item.0, &mut item.1)));
     }
 
     #[test]
