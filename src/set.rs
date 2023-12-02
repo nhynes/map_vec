@@ -67,11 +67,11 @@ impl<T: Eq> Set<T> {
         self.backing.iter().any(|v| value.eq(v.borrow()))
     }
 
-    pub fn difference<'a>(
-        &'a self,
-        other: &'a Self,
-    ) -> impl Iterator<Item = &'a T> + DoubleEndedIterator + FusedIterator {
-        self.backing.iter().filter(move |v| !other.contains(v))
+    pub fn difference<'a>(&'a self, other: &'a Self) -> Difference<'a, T> {
+        Difference {
+            iter: self.iter(),
+            other,
+        }
     }
 
     pub fn drain(&mut self) -> alloc::vec::Drain<T> {
@@ -120,11 +120,11 @@ impl<T: Eq> Set<T> {
         }
     }
 
-    pub fn intersection<'a>(
-        &'a self,
-        other: &'a Self,
-    ) -> impl Iterator<Item = &'a T> + DoubleEndedIterator<Item = &'a T> + FusedIterator {
-        self.backing.iter().filter(move |v| other.contains(v))
+    pub fn intersection<'a>(&'a self, other: &'a Self) -> Intersection<'a, T> {
+        Intersection {
+            iter: self.iter(),
+            other,
+        }
     }
 
     pub fn is_disjoint<'a>(&'a self, other: &'a Self) -> bool {
@@ -181,11 +181,10 @@ impl<T: Eq> Set<T> {
         self.backing.shrink_to_fit()
     }
 
-    pub fn symmetric_difference<'a>(
-        &'a self,
-        other: &'a Self,
-    ) -> impl Iterator<Item = &'a T> + DoubleEndedIterator + FusedIterator {
-        self.difference(other).chain(other.difference(self))
+    pub fn symmetric_difference<'a>(&'a self, other: &'a Self) -> SymmetricDifference<'a, T> {
+        SymmetricDifference {
+            iter: self.difference(other).chain(other.difference(self)),
+        }
     }
 
     pub fn take<Q: ?Sized>(&mut self, value: &Q) -> Option<T>
@@ -199,11 +198,10 @@ impl<T: Eq> Set<T> {
             .map(|pos| self.backing.remove(pos))
     }
 
-    pub fn union<'a>(
-        &'a self,
-        other: &'a Self,
-    ) -> impl Iterator<Item = &'a T> + DoubleEndedIterator + FusedIterator {
-        self.iter().chain(other.difference(self))
+    pub fn union<'a>(&'a self, other: &'a Self) -> Union<'a, T> {
+        Union {
+            iter: self.iter().chain(other.difference(self)),
+        }
     }
 }
 
@@ -324,6 +322,156 @@ impl<T: Clone + Eq> core::ops::Sub<&Set<T>> for &Set<T> {
         self.difference(rhs).cloned().collect()
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct Difference<'a, T> {
+    iter: core::slice::Iter<'a, T>,
+    other: &'a Set<T>,
+}
+
+impl<'a, T> Iterator for Difference<'a, T>
+where
+    T: Eq,
+{
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let elt = self.iter.next()?;
+            if !self.other.contains(elt) {
+                return Some(elt);
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let (_, upper) = self.iter.size_hint();
+        (0, upper)
+    }
+}
+
+impl<T> DoubleEndedIterator for Difference<'_, T>
+where
+    T: Eq,
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        loop {
+            let elt = self.iter.next_back()?;
+            if !self.other.contains(elt) {
+                return Some(elt);
+            }
+        }
+    }
+}
+
+impl<T> FusedIterator for Difference<'_, T> where T: Eq {}
+
+#[derive(Debug, Clone)]
+pub struct Intersection<'a, T> {
+    iter: core::slice::Iter<'a, T>,
+    other: &'a Set<T>,
+}
+
+impl<'a, T> Iterator for Intersection<'a, T>
+where
+    T: Eq,
+{
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let elt = self.iter.next()?;
+            if self.other.contains(elt) {
+                return Some(elt);
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let (_, upper) = self.iter.size_hint();
+        (0, upper)
+    }
+}
+
+impl<T> DoubleEndedIterator for Intersection<'_, T>
+where
+    T: Eq,
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        loop {
+            let elt = self.iter.next_back()?;
+            if self.other.contains(elt) {
+                return Some(elt);
+            }
+        }
+    }
+}
+
+impl<T> FusedIterator for Intersection<'_, T> where T: Eq {}
+
+#[derive(Debug, Clone)]
+pub struct SymmetricDifference<'a, T> {
+    iter: core::iter::Chain<Difference<'a, T>, Difference<'a, T>>,
+}
+
+impl<'a, T> Iterator for SymmetricDifference<'a, T>
+where
+    T: Eq,
+{
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let (_, upper) = self.iter.size_hint();
+        (0, upper)
+    }
+}
+
+impl<T> DoubleEndedIterator for SymmetricDifference<'_, T>
+where
+    T: Eq,
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.iter.next_back()
+    }
+}
+
+impl<T> FusedIterator for SymmetricDifference<'_, T> where T: Eq {}
+
+#[derive(Debug, Clone)]
+pub struct Union<'a, T> {
+    iter: core::iter::Chain<Iter<'a, T>, Difference<'a, T>>,
+}
+
+impl<'a, T> Iterator for Union<'a, T>
+where
+    T: Eq,
+{
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let (_, upper) = self.iter.size_hint();
+        (0, upper)
+    }
+}
+
+impl<T> DoubleEndedIterator for Union<'_, T>
+where
+    T: Eq,
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.iter.next_back()
+    }
+}
+
+impl<T> FusedIterator for Union<'_, T> where T: Eq {}
 
 // taken from libstd/collections/hash/set.rs @ 7454b2
 #[cfg(test)]
@@ -657,9 +805,7 @@ mod test_set {
                 assert_eq!(last_i, 49);
             }
 
-            for _ in &s {
-                panic!("s should be empty!");
-            }
+            assert_eq!(s.iter().next(), None, "s should be empty!");
 
             // reset to try again.
             s.extend(1..100);
