@@ -519,7 +519,9 @@ impl<'a, K, V> Entry<'a, K, V> {
 
 impl<'a, K: 'a, V: Default> Entry<'a, K, V> {
     pub fn or_default(self) -> &'a mut V {
-        self.or_insert(Default::default())
+        // We can't call the suggested `.or_default()` here because we're implementing it.
+        #[allow(clippy::unwrap_or_default)]
+        self.or_insert(V::default())
     }
 }
 
