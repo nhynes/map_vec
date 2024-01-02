@@ -14,8 +14,9 @@ keywords = ["vec", "map", "set"]
 serde = { version = "1.0", optional = true, features = ["derive"] }
 
 [dev-dependencies]
+pretty_assertions = "1"
+serde_json = "1"
 rand = "0.8"
-serde_json = "1.0"
 
 [features]
 default = ["serde"]

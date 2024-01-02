@@ -250,6 +250,15 @@ impl<'a, T> IntoIterator for &'a Set<T> {
     }
 }
 
+impl<'a, T> IntoIterator for &'a mut Set<T> {
+    type Item = &'a mut T;
+    type IntoIter = core::slice::IterMut<'a, T>;
+
+    fn into_iter(self) -> <Self as IntoIterator>::IntoIter {
+        self.backing.iter_mut()
+    }
+}
+
 impl<T> IntoIterator for Set<T> {
     type Item = T;
     type IntoIter = alloc::vec::IntoIter<T>;
@@ -259,7 +268,7 @@ impl<T> IntoIterator for Set<T> {
     }
 }
 
-impl<T: Eq> core::iter::FromIterator<T> for Set<T> {
+impl<T: Eq> FromIterator<T> for Set<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let iter = iter.into_iter();
 
@@ -577,10 +586,45 @@ mod test_set {
         for i in 0..32 {
             assert!(a.insert(i));
         }
+        assert_eq!(a.len(), 32);
+
         let mut observed: u32 = 0;
-        for k in &a {
-            observed |= 1 << *k;
+        // Ensure that we can iterate over the owned collection,
+        // and that the items are owned.
+        for k in a {
+            observed |= 1 << k;
         }
+
+        assert_eq!(observed, 0xFFFF_FFFF);
+    }
+
+    #[test]
+    fn test_iterate_ref() {
+        let a = Set::from_iter(0..32);
+        assert_eq!(a.len(), 32);
+
+        let mut observed: u32 = 0;
+        // Ensure that we can iterate over the borrowed collection,
+        // and that the items are borrowed.
+        for &k in &a {
+            observed |= 1 << k;
+        }
+
+        assert_eq!(observed, 0xFFFF_FFFF);
+    }
+
+    #[test]
+    fn test_iterate_mut() {
+        let mut a: Set<_> = (0..32).collect();
+        assert_eq!(a.len(), 32);
+
+        let mut observed: u32 = 0;
+        // Ensure that we can iterate over the mutably borrowed collection,
+        // and that the items are mutably borrowed.
+        for &mut k in &mut a {
+            observed |= 1 << k;
+        }
+
         assert_eq!(observed, 0xFFFF_FFFF);
     }
 
