@@ -9,3 +9,7 @@ pub mod set;
 
 pub use map::Map;
 pub use set::Set;
+
+#[doc = include_str!("../README.md")]
+#[cfg(doctest)]
+struct ReadmeDoctests;
