@@ -59,10 +59,10 @@ impl<T: Eq> Set<T> {
         self.backing.clear()
     }
 
-    pub fn contains<Q: ?Sized>(&self, value: &Q) -> bool
+    pub fn contains<Q>(&self, value: &Q) -> bool
     where
         T: Borrow<Q>,
-        Q: Eq,
+        Q: Eq + ?Sized,
     {
         self.backing.iter().any(|v| value.eq(v.borrow()))
     }
@@ -78,38 +78,57 @@ impl<T: Eq> Set<T> {
         self.backing.drain(..)
     }
 
-    pub fn get<Q: ?Sized>(&self, value: &Q) -> Option<&T>
+    pub fn get<Q>(&self, value: &Q) -> Option<&T>
     where
         T: Borrow<Q>,
-        Q: Eq,
+        Q: Eq + ?Sized,
     {
         self.backing.iter().find(|v| value.eq((*v).borrow()))
     }
 
     pub fn get_or_insert(&mut self, value: T) -> &T {
+        // TODO: One day, rustc will be smart enough for this.
+        //       https://stackoverflow.com/a/38031183/297468
+        // self.get(&value).unwrap_or_else(|| {
+        //     self.backing.push(value);
+        //     self.backing.last().unwrap()
+        // })
+
         let self_ptr = self as *mut Self;
-        for v in self.backing.iter() {
-            if *v == value {
-                return v;
-            }
+
+        if let Some(value) = self.get(&value) {
+            return value;
         }
-        // rustc just isn't having it
+
+        // SAFETY: self_ptr is not null and is not otherwise borrowed.
+        // This is needed until the NLL-related solution above works in stable Rust.
         unsafe { (*self_ptr).backing.push(value) };
+
         self.backing.last().unwrap()
     }
 
-    pub fn get_or_insert_with<Q: ?Sized>(&mut self, value: &Q, f: impl FnOnce(&Q) -> T) -> &T
+    pub fn get_or_insert_with<Q>(&mut self, value: &Q, f: impl FnOnce(&Q) -> T) -> &T
     where
         T: Borrow<Q>,
-        Q: Eq,
+        Q: Eq + ?Sized,
     {
+        // TODO: One day, rustc will be smart enough for this.
+        //       https://stackoverflow.com/a/38031183/297468
+        // self.get(&value).unwrap_or_else(|| {
+        //     self.backing.push(f(value));
+        //     self.backing.last().unwrap()
+        // })
+
         let self_ptr = self as *mut Self;
-        for v in self.backing.iter() {
-            if (*v).borrow() == value {
-                return v;
-            }
+
+        if let Some(value) = self.get(value) {
+            return value;
         }
+
+        // SAFETY: self_ptr is not null and is not otherwise borrowed.
+        // This is needed until the NLL-related solution above works in stable Rust.
         unsafe { (*self_ptr).backing.push(f(value)) };
+
         self.backing.last().unwrap()
     }
 
@@ -151,10 +170,10 @@ impl<T: Eq> Set<T> {
         self.backing.len()
     }
 
-    pub fn remove<Q: ?Sized>(&mut self, value: &Q) -> bool
+    pub fn remove<Q>(&mut self, value: &Q) -> bool
     where
         T: Borrow<Q>,
-        Q: Eq,
+        Q: Eq + ?Sized,
     {
         self.take(value).is_some()
     }
@@ -187,10 +206,10 @@ impl<T: Eq> Set<T> {
         }
     }
 
-    pub fn take<Q: ?Sized>(&mut self, value: &Q) -> Option<T>
+    pub fn take<Q>(&mut self, value: &Q) -> Option<T>
     where
         T: Borrow<Q>,
-        Q: Eq,
+        Q: Eq + ?Sized,
     {
         self.backing
             .iter()
@@ -231,6 +250,15 @@ impl<'a, T> IntoIterator for &'a Set<T> {
     }
 }
 
+impl<'a, T> IntoIterator for &'a mut Set<T> {
+    type Item = &'a mut T;
+    type IntoIter = core::slice::IterMut<'a, T>;
+
+    fn into_iter(self) -> <Self as IntoIterator>::IntoIter {
+        self.backing.iter_mut()
+    }
+}
+
 impl<T> IntoIterator for Set<T> {
     type Item = T;
     type IntoIter = alloc::vec::IntoIter<T>;
@@ -240,7 +268,7 @@ impl<T> IntoIterator for Set<T> {
     }
 }
 
-impl<T: Eq> core::iter::FromIterator<T> for Set<T> {
+impl<T: Eq> FromIterator<T> for Set<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let iter = iter.into_iter();
 
@@ -558,10 +586,45 @@ mod test_set {
         for i in 0..32 {
             assert!(a.insert(i));
         }
+        assert_eq!(a.len(), 32);
+
         let mut observed: u32 = 0;
-        for k in &a {
-            observed |= 1 << *k;
+        // Ensure that we can iterate over the owned collection,
+        // and that the items are owned.
+        for k in a {
+            observed |= 1 << k;
         }
+
+        assert_eq!(observed, 0xFFFF_FFFF);
+    }
+
+    #[test]
+    fn test_iterate_ref() {
+        let a = Set::from_iter(0..32);
+        assert_eq!(a.len(), 32);
+
+        let mut observed: u32 = 0;
+        // Ensure that we can iterate over the borrowed collection,
+        // and that the items are borrowed.
+        for &k in &a {
+            observed |= 1 << k;
+        }
+
+        assert_eq!(observed, 0xFFFF_FFFF);
+    }
+
+    #[test]
+    fn test_iterate_mut() {
+        let mut a: Set<_> = (0..32).collect();
+        assert_eq!(a.len(), 32);
+
+        let mut observed: u32 = 0;
+        // Ensure that we can iterate over the mutably borrowed collection,
+        // and that the items are mutably borrowed.
+        for &mut k in &mut a {
+            observed |= 1 << k;
+        }
+
         assert_eq!(observed, 0xFFFF_FFFF);
     }
 
@@ -718,6 +781,8 @@ mod test_set {
             assert!(set.contains(x));
         }
 
+        // -1 because `2` is duplicated in the source array, and the collected
+        // `Set` will contain unique values.
         assert_eq!(set.iter().len(), xs.len() - 1);
     }
 

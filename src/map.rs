@@ -113,13 +113,13 @@ impl<K: Eq, V> Map<K, V> {
     }
 
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-        for (k, ref mut v) in self.backing.iter_mut() {
-            if *k == key {
-                return Some(core::mem::replace(v, value));
+        match self.get_mut(&key) {
+            Some(v) => Some(core::mem::replace(v, value)),
+            None => {
+                self.backing.push((key, value));
+                None
             }
         }
-        self.backing.push((key, value));
-        None
     }
 
     pub fn is_empty(&self) -> bool {
@@ -247,7 +247,7 @@ impl<K, V> IntoIterator for Map<K, V> {
     }
 }
 
-impl<K: Eq, V> core::iter::FromIterator<(K, V)> for Map<K, V> {
+impl<K: Eq, V> FromIterator<(K, V)> for Map<K, V> {
     fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
         let iter = iter.into_iter();
 
@@ -519,7 +519,9 @@ impl<'a, K, V> Entry<'a, K, V> {
 
 impl<'a, K: 'a, V: Default> Entry<'a, K, V> {
     pub fn or_default(self) -> &'a mut V {
-        self.or_insert(Default::default())
+        // We can't call the suggested `.or_default()` here because we're implementing it.
+        #[allow(clippy::unwrap_or_default)]
+        self.or_insert(V::default())
     }
 }
 
@@ -576,13 +578,14 @@ impl<'a, K: 'a, V: 'a> VacantEntry<'a, K, V> {
 
 #[cfg(feature = "serde")]
 mod map_serde {
-    use super::*;
-
     use core::marker::PhantomData;
+
     use serde::{
         de::{Deserialize, Deserializer, MapAccess, Visitor},
         ser::{Serialize, SerializeMap, Serializer},
     };
+
+    use super::*;
 
     impl<K, V> Serialize for Map<K, V>
     where
@@ -648,14 +651,18 @@ mod map_serde {
     #[cfg(test)]
     #[test]
     fn test_serde() {
+        use pretty_assertions::assert_eq;
+
         let mut m = Map::new();
         m.insert("onefish", "twofish");
         m.insert("redfish", "bluefish");
+
         let json = serde_json::to_string(&m).unwrap();
         assert_eq!(
             json.as_str(),
             r#"{"onefish":"twofish","redfish":"bluefish"}"#
         );
+
         let m2: Map<&str, &str> = serde_json::from_str(&json).unwrap();
         assert_eq!(m2, m);
     }
@@ -664,14 +671,15 @@ mod map_serde {
 // taken from libstd/collections/hash/map.rs @ 7454b2
 #[cfg(test)]
 mod test_map {
+    use core::{cell::RefCell, usize};
+
+    use pretty_assertions::assert_eq;
+    use rand::{thread_rng, Rng};
+
     use super::{
         Entry::{Occupied, Vacant},
         Map,
     };
-
-    use std::{cell::RefCell, usize};
-
-    use rand::{thread_rng, Rng};
 
     #[test]
     fn test_zero_capacities() {
@@ -1061,16 +1069,56 @@ mod test_map {
     fn test_iterate() {
         let mut m = Map::with_capacity(4);
         for i in 0..32 {
-            assert!(m.insert(i, i * 2).is_none());
+            assert_eq!(None, m.insert(i, i * 2));
         }
         assert_eq!(m.len(), 32);
 
         let mut observed: u32 = 0;
-
-        for (k, v) in &m {
-            assert_eq!(*v, *k * 2);
-            observed |= 1 << *k;
+        // Ensure that we can iterate over the owned collection,
+        // and that the items are owned.
+        for (k, v) in m {
+            assert_eq!(v, k * 2);
+            observed |= 1 << k;
         }
+
+        assert_eq!(observed, 0xFFFF_FFFF);
+    }
+
+    #[test]
+    fn test_iterate_ref() {
+        let mut m = Map::with_capacity(0);
+        for i in 0..32 {
+            assert_eq!(None, m.insert(i, i * 2));
+        }
+        assert_eq!(m.len(), 32);
+
+        let mut observed: u32 = 0;
+        // Ensure that we can iterate over the borrowed collection,
+        // and that the items are borrowed.
+        for (&k, &v) in &m {
+            assert_eq!(v, k * 2);
+            observed |= 1 << k;
+        }
+
+        assert_eq!(observed, 0xFFFF_FFFF);
+    }
+
+    #[test]
+    fn test_iterate_mut() {
+        let mut m = Map::new();
+        for i in 0..32 {
+            assert_eq!(None, m.insert(i, i * 2));
+        }
+        assert_eq!(m.len(), 32);
+
+        let mut observed: u32 = 0;
+        // Ensure that we can iterate over the mutably borrowed collection,
+        // and that the items are mutably borrowed.
+        for (&mut k, &mut v) in &mut m {
+            assert_eq!(v, k * 2);
+            observed |= 1 << k;
+        }
+
         assert_eq!(observed, 0xFFFF_FFFF);
     }
 
@@ -1192,15 +1240,27 @@ mod test_map {
 
     #[test]
     fn test_from_iter() {
-        let xs = [(1, 1), (2, 2), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)];
+        let xs = [
+            (1_i32, 1_i32),
+            (2, -1), // This one will be put into the map first
+            (2, 2),  // But this one will clobber the previous one
+            (3, 3),
+            (4, 4),
+            (5, 5),
+            (6, 6),
+        ];
 
         let map: Map<_, _> = xs.iter().cloned().collect();
 
-        for &(k, v) in &xs {
+        for &(k, v) in xs.iter().filter(|(_k, v)| v.is_positive()) {
             assert_eq!(map.get(&k), Some(&v));
         }
 
+        // -1 because the `2` key is duplicated in the source array, and the
+        // collected `Map` will contain unique keys.
         assert_eq!(map.iter().len(), xs.len() - 1);
+        assert_eq!(map.len(), xs.len() - 1);
+        assert_eq!(map.capacity(), xs.len() - 1);
     }
 
     #[test]
