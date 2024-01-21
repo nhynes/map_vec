@@ -1,4 +1,5 @@
-//! # map_vec: Map and Set APIs backed by Vecs.
+//! # map_vec: Map and Set APIs backed by `Vec`s.
+
 #![cfg_attr(not(test), no_std)]
 #![cfg_attr(feature = "nightly", feature(drain_filter, try_reserve_kind))]
 

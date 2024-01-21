@@ -781,6 +781,8 @@ mod test_set {
             assert!(set.contains(x));
         }
 
+        // -1 because `2` is duplicated in the source array, and the collected
+        // `Set` will contain unique values.
         assert_eq!(set.iter().len(), xs.len() - 1);
     }
 

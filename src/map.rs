@@ -1240,15 +1240,27 @@ mod test_map {
 
     #[test]
     fn test_from_iter() {
-        let xs = [(1, 1), (2, 2), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6)];
+        let xs = [
+            (1_i32, 1_i32),
+            (2, -1), // This one will be put into the map first
+            (2, 2),  // But this one will clobber the previous one
+            (3, 3),
+            (4, 4),
+            (5, 5),
+            (6, 6),
+        ];
 
         let map: Map<_, _> = xs.iter().cloned().collect();
 
-        for &(k, v) in &xs {
+        for &(k, v) in xs.iter().filter(|(_k, v)| v.is_positive()) {
             assert_eq!(map.get(&k), Some(&v));
         }
 
+        // -1 because the `2` key is duplicated in the source array, and the
+        // collected `Map` will contain unique keys.
         assert_eq!(map.iter().len(), xs.len() - 1);
+        assert_eq!(map.len(), xs.len() - 1);
+        assert_eq!(map.capacity(), xs.len() - 1);
     }
 
     #[test]
