@@ -5,9 +5,10 @@ use core::{
     iter::FusedIterator,
 };
 
-/// `map_vec::Map` is a data structure with a [`HashMap`](https://doc.rust-lang.org/std/collections/hash_map/struct.HashMap.html)-like API but based on a `Vec`.
+/// `Map` is a data structure with a [`HashMap`]-like API but based on a `Vec`.
+///
 /// It's primarily useful when you care about constant factors or prefer determinism to speed.
-/// Please refer to the [docs for `HashMap`](https://doc.rust-lang.org/std/collections/hash_map/struct.HashMap.html) for details and examples of the Map API.
+/// Please refer to the docs for [`HashMap`] for details and examples of the Map API.
 ///
 /// ## Example
 ///
@@ -17,6 +18,8 @@ use core::{
 /// map.entry("hello".to_string()).and_modify(|mut v| v.push_str("!"));
 /// assert_eq!(map.get("hello").map(String::as_str), Some("world!"))
 /// ```
+///
+/// [`HashMap`]: std::collections::HashMap
 #[derive(Clone, PartialEq, Eq)]
 pub struct Map<K, V> {
     backing: Vec<(K, V)>,
@@ -51,10 +54,10 @@ impl<K: Eq, V> Map<K, V> {
         self.backing.clear()
     }
 
-    pub fn contains_key<Q: ?Sized>(&self, key: &Q) -> bool
+    pub fn contains_key<Q>(&self, key: &Q) -> bool
     where
         K: Borrow<Q>,
-        Q: Eq,
+        Q: Eq + ?Sized,
     {
         self.keys().any(|k| key.eq(k.borrow()))
     }
@@ -79,10 +82,10 @@ impl<K: Eq, V> Map<K, V> {
         }
     }
 
-    pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<&V>
+    pub fn get<Q>(&self, key: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
-        Q: Eq,
+        Q: Eq + ?Sized,
     {
         self.backing
             .iter()
@@ -90,10 +93,10 @@ impl<K: Eq, V> Map<K, V> {
             .map(|(_, v)| v)
     }
 
-    pub fn get_key_value<Q: ?Sized>(&self, key: &Q) -> Option<(&K, &V)>
+    pub fn get_key_value<Q>(&self, key: &Q) -> Option<(&K, &V)>
     where
         K: Borrow<Q>,
-        Q: Eq,
+        Q: Eq + ?Sized,
     {
         self.backing
             .iter()
@@ -101,10 +104,10 @@ impl<K: Eq, V> Map<K, V> {
             .map(|(k, v)| (k, v))
     }
 
-    pub fn get_mut<Q: ?Sized>(&mut self, key: &Q) -> Option<&mut V>
+    pub fn get_mut<Q>(&mut self, key: &Q) -> Option<&mut V>
     where
         K: Borrow<Q>,
-        Q: Eq,
+        Q: Eq + ?Sized,
     {
         self.backing
             .iter_mut()
@@ -146,18 +149,18 @@ impl<K: Eq, V> Map<K, V> {
         self.backing.len()
     }
 
-    pub fn remove<Q: ?Sized>(&mut self, key: &Q) -> Option<V>
+    pub fn remove<Q>(&mut self, key: &Q) -> Option<V>
     where
         K: Borrow<Q>,
-        Q: Eq,
+        Q: Eq + ?Sized,
     {
         self.remove_entry(key).map(|(_, v)| v)
     }
 
-    pub fn remove_entry<Q: ?Sized>(&mut self, key: &Q) -> Option<(K, V)>
+    pub fn remove_entry<Q>(&mut self, key: &Q) -> Option<(K, V)>
     where
         K: Borrow<Q>,
-        Q: Eq,
+        Q: Eq + ?Sized,
     {
         self.backing
             .iter()
@@ -169,20 +172,11 @@ impl<K: Eq, V> Map<K, V> {
         self.backing.reserve(additional);
     }
 
-    #[cfg(not(feature = "nightly"))]
-    pub fn retain(&mut self, mut f: impl FnMut(&K, &mut V) -> bool) {
-        let mut retained = Vec::new();
-        for (k, mut v) in self.backing.drain(..) {
-            if f(&k, &mut v) {
-                retained.push((k, v))
-            }
-        }
-        self.backing = retained;
-    }
-
-    #[cfg(feature = "nightly")]
-    pub fn retain(&mut self, mut f: impl FnMut(&K, &mut V) -> bool) {
-        self.backing.drain_filter(|(k, ref mut v)| !f(k, v));
+    pub fn retain<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&K, &mut V) -> bool,
+    {
+        self.backing.retain_mut(|(k, v)| f(k, v));
     }
 
     pub fn shrink_to_fit(&mut self) {
@@ -339,8 +333,9 @@ impl<K, V> DoubleEndedIterator for Keys<'_, K, V> {
 impl<K, V> ExactSizeIterator for Keys<'_, K, V> {}
 impl<K, V> FusedIterator for Keys<'_, K, V> {}
 
+#[cfg_attr(any(docsrs, feature = "nightly"), doc(cfg(feature = "nightly")))]
 #[cfg(feature = "nightly")]
-impl<K, V> core::iter::TrustedLen for Keys<'_, K, V> {}
+unsafe impl<K, V> core::iter::TrustedLen for Keys<'_, K, V> {}
 
 #[derive(Debug, Clone)]
 pub struct Values<'a, K, V> {
@@ -374,8 +369,9 @@ impl<K, V> DoubleEndedIterator for Values<'_, K, V> {
 impl<K, V> ExactSizeIterator for Values<'_, K, V> {}
 impl<K, V> FusedIterator for Values<'_, K, V> {}
 
+#[cfg_attr(any(docsrs, feature = "nightly"), doc(cfg(feature = "nightly")))]
 #[cfg(feature = "nightly")]
-impl<K, V> core::iter::TrustedLen for Values<'_, K, V> {}
+unsafe impl<K, V> core::iter::TrustedLen for Values<'_, K, V> {}
 
 #[derive(Debug)]
 pub struct ValuesMut<'a, K, V> {
@@ -409,8 +405,9 @@ impl<K, V> DoubleEndedIterator for ValuesMut<'_, K, V> {
 impl<K, V> ExactSizeIterator for ValuesMut<'_, K, V> {}
 impl<K, V> FusedIterator for ValuesMut<'_, K, V> {}
 
+#[cfg_attr(any(docsrs, feature = "nightly"), doc(cfg(feature = "nightly")))]
 #[cfg(feature = "nightly")]
-impl<K, V> core::iter::TrustedLen for ValuesMut<'_, K, V> {}
+unsafe impl<K, V> core::iter::TrustedLen for ValuesMut<'_, K, V> {}
 
 #[derive(Debug, Clone)]
 pub struct Iter<'a, K, V> {
@@ -444,8 +441,9 @@ impl<'a, K, V> DoubleEndedIterator for Iter<'a, K, V> {
 impl<'a, K, V> ExactSizeIterator for Iter<'a, K, V> {}
 impl<'a, K, V> FusedIterator for Iter<'a, K, V> {}
 
+#[cfg_attr(any(docsrs, feature = "nightly"), doc(cfg(feature = "nightly")))]
 #[cfg(feature = "nightly")]
-impl<'a, K, V> core::iter::TrustedLen for Iter<'a, K, V> {}
+unsafe impl<'a, K, V> core::iter::TrustedLen for Iter<'a, K, V> {}
 
 #[derive(Debug)]
 pub struct IterMut<'a, K, V> {
@@ -479,8 +477,9 @@ impl<'a, K, V> DoubleEndedIterator for IterMut<'a, K, V> {
 impl<'a, K, V> ExactSizeIterator for IterMut<'a, K, V> {}
 impl<'a, K, V> FusedIterator for IterMut<'a, K, V> {}
 
+#[cfg_attr(any(docsrs, feature = "nightly"), doc(cfg(feature = "nightly")))]
 #[cfg(feature = "nightly")]
-impl<'a, K, V> core::iter::TrustedLen for IterMut<'a, K, V> {}
+unsafe impl<'a, K, V> core::iter::TrustedLen for IterMut<'a, K, V> {}
 
 pub enum Entry<'a, K: 'a, V: 'a> {
     Occupied(OccupiedEntry<'a, K, V>),
@@ -519,8 +518,11 @@ impl<'a, K, V> Entry<'a, K, V> {
 
 impl<'a, K: 'a, V: Default> Entry<'a, K, V> {
     pub fn or_default(self) -> &'a mut V {
-        // We can't call the suggested `.or_default()` here because we're implementing it.
-        #[allow(clippy::unwrap_or_default)]
+        #[allow(
+            clippy::unwrap_or_default,
+            // reason = "We can't call the suggested `.or_default()` here \
+            //     because we're implementing it."
+        )]
         self.or_insert(V::default())
     }
 }
@@ -578,15 +580,16 @@ impl<'a, K: 'a, V: 'a> VacantEntry<'a, K, V> {
 
 #[cfg(feature = "serde")]
 mod map_serde {
-    use core::marker::PhantomData;
+    use core::{fmt, marker::PhantomData};
 
     use serde::{
         de::{Deserialize, Deserializer, MapAccess, Visitor},
         ser::{Serialize, SerializeMap, Serializer},
     };
 
-    use super::*;
+    use super::Map;
 
+    #[cfg_attr(any(docsrs, feature = "nightly"), doc(cfg(feature = "serde")))]
     impl<K, V> Serialize for Map<K, V>
     where
         K: Serialize + Eq,
@@ -604,17 +607,19 @@ mod map_serde {
         }
     }
 
+    #[cfg_attr(any(docsrs, feature = "nightly"), doc(cfg(feature = "serde")))]
     impl<'de, K, V> Deserialize<'de> for Map<K, V>
     where
         K: Deserialize<'de> + Eq,
         V: Deserialize<'de>,
     {
+        /// If deserializing a map with duplicate keys, only the first one will be kept.
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where
             D: Deserializer<'de>,
         {
             struct MapVisitor<K, V> {
-                marker: PhantomData<fn() -> Map<K, V>>,
+                marker: PhantomData<(K, V)>,
             }
 
             impl<'de, K, V> Visitor<'de> for MapVisitor<K, V>
@@ -635,7 +640,7 @@ mod map_serde {
                     let mut map = Map::with_capacity(access.size_hint().unwrap_or(0));
 
                     while let Some((key, value)) = access.next_entry()? {
-                        map.insert(key, value);
+                        map.entry(key).or_insert(value);
                     }
 
                     Ok(map)
@@ -649,29 +654,44 @@ mod map_serde {
     }
 
     #[cfg(test)]
-    #[test]
-    fn test_serde() {
+    mod test {
         use pretty_assertions::assert_eq;
 
-        let mut m = Map::new();
-        m.insert("onefish", "twofish");
-        m.insert("redfish", "bluefish");
+        use super::Map;
 
-        let json = serde_json::to_string(&m).unwrap();
-        assert_eq!(
-            json.as_str(),
-            r#"{"onefish":"twofish","redfish":"bluefish"}"#
-        );
+        #[test]
+        fn test_roundtrip() {
+            let m = Map::from([("one fish", "two fish"), ("red fish", "blue fish")]);
 
-        let m2: Map<&str, &str> = serde_json::from_str(&json).unwrap();
-        assert_eq!(m2, m);
+            let json = serde_json::to_string(&m).unwrap();
+            assert_eq!(
+                json.as_str(),
+                r#"{"one fish":"two fish","red fish":"blue fish"}"#
+            );
+
+            let m2: Map<&str, &str> = serde_json::from_str(&json).unwrap();
+            assert_eq!(m2, m);
+        }
+
+        #[test]
+        fn test_deserialize() {
+            const INPUT: &str =
+                r#"{"one fish":"two fish","red fish":"blue fish","red fish":"third fish"}"#;
+
+            let m: Map<&str, &str> = serde_json::from_str(INPUT).unwrap();
+            assert_eq!(
+                Map::from([("one fish", "two fish"), ("red fish", "blue fish")]),
+                m,
+                "Duplicate keys should be deduplicated, and the first one should be kept."
+            );
+        }
     }
 }
 
 // taken from libstd/collections/hash/map.rs @ 7454b2
 #[cfg(test)]
-mod test_map {
-    use core::{cell::RefCell, usize};
+mod test {
+    use core::cell::RefCell;
 
     use pretty_assertions::assert_eq;
     use rand::{thread_rng, Rng};
@@ -743,7 +763,7 @@ mod test_map {
         assert_eq!(m2.len(), 2);
     }
 
-    thread_local! { static DROP_VECTOR: RefCell<Vec<i32>> = RefCell::new(Vec::new()) }
+    thread_local! { static DROP_VECTOR: RefCell<Vec<i32>> = const { RefCell::new(Vec::new()) } }
 
     #[derive(PartialEq, Eq)]
     struct Droppable {
@@ -1412,8 +1432,7 @@ mod test_map {
 
     #[test]
     fn test_entry_take_doesnt_corrupt() {
-        #![allow(deprecated)] //rand
-                              // Test for #19292
+        // Test for #19292
         fn check(m: &Map<i32, ()>) {
             for k in m.keys() {
                 assert!(m.contains_key(k), "{} is in keys() but not in the map?", k);
@@ -1584,7 +1603,10 @@ mod test_map {
     /// Ensures that things that can be turned `Into` a `Vec<(K, V)>` can also be turned into a `Map<K, V>`
     #[test]
     fn test_from_into_vec() {
-        #[allow(clippy::useless_conversion)]
+        #[allow(
+            clippy::useless_conversion,
+            // reason = "Being consistent about the desired type"
+        )]
         let _: Vec<(char, u32)> = vec![('a', 1)].into();
         let _: Map<char, u32> = vec![('a', 1)].into();
         let _: Vec<(char, u32)> = [('a', 1)].into();
