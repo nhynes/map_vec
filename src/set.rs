@@ -6,9 +6,10 @@ use core::{
     slice::Iter,
 };
 
-/// `map_vec::Set` is a data structure with a [`Set`](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html)-like API but based on a `Vec`.
+/// `Set` is a data structure with a [`HashSet`]-like API but based on a `Vec`.
+///
 /// It's primarily useful when you care about constant factors or prefer determinism to speed.
-/// Please refer to the [docs for `Set`](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html) for details and examples of the Set API.
+/// Please refer to the docs for [`HashSet`] for details and examples of the Set API.
 ///
 /// ## Example
 ///
@@ -23,9 +24,9 @@ use core::{
 /// assert!(set3.insert(3));
 /// assert_eq!(&set2 - &set1, set3);
 /// ```
+///
+/// [`HashSet`]: std::collections::HashSet
 #[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct Set<T> {
     backing: Vec<T>,
 }
@@ -88,11 +89,16 @@ impl<T: Eq> Set<T> {
 
     pub fn get_or_insert(&mut self, value: T) -> &T {
         // TODO: One day, rustc will be smart enough for this.
-        //       https://stackoverflow.com/a/38031183/297468
-        // self.get(&value).unwrap_or_else(|| {
-        //     self.backing.push(value);
-        //     self.backing.last().unwrap()
-        // })
+        // Needs Polonius to complete the non-lexical lifetimes (NLL).
+        // https://blog.rust-lang.org/2022/08/05/nll-by-default.html
+        //
+        // match self.get(&value) {
+        //     Some(existing) => existing,
+        //     None => {
+        //         self.backing.push(value);
+        //         self.backing.last().unwrap()
+        //     }
+        // }
 
         let self_ptr = self as *mut Self;
 
@@ -192,7 +198,10 @@ impl<T: Eq> Set<T> {
         self.backing.reserve(additional)
     }
 
-    pub fn retain(&mut self, f: impl FnMut(&T) -> bool) {
+    pub fn retain<F>(&mut self, f: F)
+    where
+        F: FnMut(&T) -> bool,
+    {
         self.backing.retain(f);
     }
 
@@ -498,9 +507,125 @@ where
 
 impl<T> FusedIterator for Union<'_, T> where T: Eq {}
 
+#[cfg(feature = "serde")]
+mod set_serde {
+    use core::{fmt, marker::PhantomData};
+
+    use serde::{
+        de::{SeqAccess, Visitor},
+        ser::SerializeSeq,
+        Deserialize, Deserializer, Serialize, Serializer,
+    };
+
+    use super::Set;
+
+    #[cfg_attr(any(docsrs, feature = "nightly"), doc(cfg(feature = "serde")))]
+    impl<T> Serialize for Set<T>
+    where
+        T: Serialize + Eq,
+    {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            let mut seq = serializer.serialize_seq(Some(self.len()))?;
+            for item in self {
+                seq.serialize_element(item)?;
+            }
+            seq.end()
+        }
+    }
+
+    #[cfg_attr(any(docsrs, feature = "nightly"), doc(cfg(feature = "serde")))]
+    impl<'de, T> Deserialize<'de> for Set<T>
+    where
+        T: Deserialize<'de> + Eq,
+    {
+        /// If deserializing a sequence with duplicate values, only the first one will be kept.
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            struct SetVisitor<T> {
+                marker: PhantomData<T>,
+            }
+
+            impl<'de, T> Visitor<'de> for SetVisitor<T>
+            where
+                T: Deserialize<'de> + Eq,
+            {
+                type Value = Set<T>;
+
+                fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                    formatter.write_str("a sequence")
+                }
+
+                fn visit_seq<S>(self, mut seq: S) -> Result<Self::Value, S::Error>
+                where
+                    S: SeqAccess<'de>,
+                {
+                    let mut set = Set::with_capacity(seq.size_hint().unwrap_or(0));
+
+                    while let Some(item) = seq.next_element()? {
+                        set.get_or_insert(item);
+                    }
+
+                    Ok(set)
+                }
+            }
+
+            deserializer.deserialize_seq(SetVisitor {
+                marker: PhantomData,
+            })
+        }
+    }
+
+    #[cfg(test)]
+    mod test {
+        use pretty_assertions::assert_eq;
+
+        use super::Set;
+
+        #[test]
+        fn test_roundtrip() {
+            let s = Set::from(["one fish", "two fish", "red fish", "blue fish"]);
+
+            let json = serde_json::to_string(&s).unwrap();
+            assert_eq!(
+                json.as_str(),
+                r#"["one fish","two fish","red fish","blue fish"]"#
+            );
+
+            let s2: Set<&str> = serde_json::from_str(&json).unwrap();
+            assert_eq!(s2, s);
+        }
+
+        #[test]
+        fn test_deserialize() {
+            const INPUT: &str =
+                r#"["one fish","two fish","red fish","blue fish","red fish","third fish"]"#;
+
+            let m: Set<&str> = serde_json::from_str(INPUT).unwrap();
+            assert_eq!(
+                Set::from([
+                    "one fish",
+                    "two fish",
+                    "red fish",
+                    "blue fish",
+                    "third fish"
+                ]),
+                m,
+                "Duplicate keys should be deduplicated, and the first one should be kept."
+            );
+        }
+    }
+}
+
 // taken from libstd/collections/hash/set.rs @ 7454b2
 #[cfg(test)]
 mod test_set {
+    use pretty_assertions::assert_eq;
+
     use super::Set;
 
     #[test]
@@ -890,12 +1015,29 @@ mod test_set {
         let mut s = Set::new();
         assert_eq!(s.replace(Foo("a", 1)), None);
         assert_eq!(s.len(), 1);
-        assert_eq!(s.replace(Foo("a", 2)), Some(Foo("a", 1)));
+
+        let existing = s
+            .replace(Foo("a", 2))
+            .expect("Did not get the existing item");
+
+        // Do _not_ use `assert_eq!(Foo("a", 1), existing)` here as the `PartialEq`
+        // implementation only checks `Foo.0`, but we also need to check `Foo.1`.
+        let Foo(a, b) = existing;
+        assert_eq!(a, "a");
+        assert_eq!(b, 1);
+
         assert_eq!(s.len(), 1);
 
         let mut it = s.iter();
-        assert_eq!(it.next(), Some(&Foo("a", 2)));
-        assert_eq!(it.next(), None);
+
+        // Do _not_ use `assert_eq!()` here as the `PartialEq` implementation
+        // only checks `Foo.0`, but we also need to check `Foo.1`.
+        let item = it.next().expect("Should get an item from the iterator");
+        let &Foo(a, b) = item;
+        assert_eq!(a, "a");
+        assert_eq!(b, 2);
+
+        assert_eq!(it.next(), None, "Should be no more items in the iterator");
     }
 
     #[test]
@@ -950,7 +1092,10 @@ mod test_set {
     /// Ensures that things that can be turned `Into` a `Vec` can also be turned into a `Set`
     #[test]
     fn test_from_into_vec() {
-        #[allow(clippy::useless_conversion)]
+        #[allow(
+            clippy::useless_conversion,
+            // reason = "Being consistent about the desired type"
+        )]
         let _: Vec<()> = vec![()].into();
         let _: Set<()> = vec![()].into();
         let _: Vec<()> = [()].into();

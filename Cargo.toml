@@ -1,6 +1,7 @@
 [package]
 name = "map_vec"
-version = "0.5.0"
+version = "0.6.0"
+rust-version = "1.61.0"
 license = "MIT OR Apache-2.0"
 authors = ["Nick Hynes <nhynes@nhynes.com>"]
 repository = "https://github.com/nhynes/map_vec"
@@ -9,9 +10,10 @@ readme = "README.md"
 categories = ["data-structures", "embedded", "no-std"]
 edition = "2021"
 keywords = ["vec", "map", "set"]
+exclude = [".vscode", "check.sh"]
 
 [dependencies]
-serde = { version = "1", optional = true, features = ["derive"] }
+serde = { version = "1", optional = true, default-features = false, features = ["alloc", "derive"] }
 
 [dev-dependencies]
 pretty_assertions = "1"
@@ -19,5 +21,10 @@ serde_json = "1"
 rand = "0.8"
 
 [features]
-default = ["serde"]
+default = []
+serde = ["dep:serde"]
+# This feature can only be used with the `nightly` toolchain.
 nightly = []
+
+[package.metadata.docs.rs]
+all-features = true

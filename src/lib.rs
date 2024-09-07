@@ -1,16 +1,15 @@
-//! # map_vec: Map and Set APIs backed by `Vec`s.
-
-#![cfg_attr(not(test), no_std)]
-#![cfg_attr(feature = "nightly", feature(drain_filter, try_reserve_kind))]
+#![doc = include_str!("../README.md")]
+#![cfg_attr(not(any(test, doc)), no_std)]
+#![cfg_attr(feature = "nightly", feature(trusted_len, try_reserve_kind))]
+#![cfg_attr(any(docsrs, feature = "nightly"), feature(doc_cfg))]
 
 extern crate alloc;
 
 pub mod map;
 pub mod set;
 
+#[doc(inline)]
 pub use map::Map;
-pub use set::Set;
 
-#[doc = include_str!("../README.md")]
-#[cfg(doctest)]
-struct ReadmeDoctests;
+#[doc(inline)]
+pub use set::Set;
